@@ -1,0 +1,23 @@
+#!/bin/bash
+set -ex
+
+if [[ -z "$1" ]]; then
+    echo "Usage: $0 <package-name>"
+    exit 1
+fi
+
+if [[ -z "$VIRTUAL_ENV" ]]; then
+    echo "No active virtualenv found"
+    exit 1
+fi
+
+LIB_DIR='/usr/lib/python2.7/dist-packages'
+
+if [[ ! -e "$LIB_DIR/$1" ]]; then
+    echo "Package $1 seems not to be installed system-wide"
+fi
+
+
+echo "Implanting $1 package to virtualenv $VIRTUAL_ENV"
+
+ln -fs $LIB_DIR/$1 $VIRTUAL_ENV/lib/python2.7/site-packages/
