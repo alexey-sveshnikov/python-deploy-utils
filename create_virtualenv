@@ -1,0 +1,125 @@
+#!/bin/bash
+set -e
+
+ARGS=$(getopt -o r:i:p:w: --long requirements:,implant:,path,wheels:,devpi:,devpi-repo:,devpi-user:,devpi-password: -n '$0' -- "$@")
+eval set -- "$ARGS"
+
+reqs_file=''
+implant_file=''
+ve_root=''
+wheels_dir=''
+devpi=''
+devpi_repo=''
+devpi_user=''
+devpi_password=''
+
+while true; do
+    case "$1" in
+        -r | --requirements ) reqs_file=$2; shift 2 ;;
+        -i | --implant ) implant_file=$2; shift 2 ;;
+        -p | --path ) ve_root=$2; shift 2 ;;
+        -w | --wheels ) wheels_dir=$2; shift 2 ;;
+        --devpi ) devpi=$2; shift 2 ;;
+        --devpi-repo ) devpi_repo=$2; shift 2 ;;
+        --devpi-user ) devpi_user=$2; shift 2 ;;
+        --devpi-password ) devpi_password=$2; shift 2 ;;
+        -- ) shift; break ;;
+        * ) break ;;
+    esac
+done
+
+if [[ -z $reqs_file || -z $ve_root ]]; then
+    echo "Usage: $0 -p /var/lib/virtualenv_root_dir [-r requirements.txt] [-w wheels_dir] [-i requerements_implant.txt] [-d devpi_url]"
+    echo "or:    $0 --path=<...> --requirements=<...> [--wheels-dir=<...>] [--implant=<...>]"
+    echo "devpi example: $0 ... --devpi http://localhost:3141 --devpi-repo zed/prod --devpi-user zed [--devpi-password pass]"
+    echo "Please note that -p argument must be virtualenv root dir, not the actual virtualenv directory"
+    exit 1
+fi
+
+if [[ $devpi ]]; then
+    if [[ -z $devpi_repo || -z $devpi_user ]]; then
+        echo "--devpi-repo and devpi-user options required"
+        exit 1
+    fi
+fi
+
+if [[ $devpi && $wheels_dir ]]; then
+    echo "devpi and wheels? no"
+    exit 1
+fi
+
+# Calculate digest
+md5=`cat $reqs_file | md5sum`
+
+if [[ $wheels_dir ]]; then
+    # Add both wheel names and content
+    md5=`(echo "$md5"; find $wheels_dir -type f | sort) | md5sum`
+    md5=`(echo "$md5"; find $wheels_dir -type f | sort | xargs cat) | md5sum`
+fi
+
+if [[ $implant_file ]]; then
+    md5=`(echo "$md5"; cat $implant_file) | md5sum`
+fi
+
+md5=`echo "$md5" | cut -f1 -d' '`
+
+
+ve_dir="$ve_root/$md5";
+ve_current="$ve_root/current"
+pip_cache='/var/lib/pip-cache'
+
+if [[ -d $ve_dir && -f $ve_dir/finished ]]; then
+    echo "Virtualenv is OK";
+    link=`readlink $ve_current || :`
+    if [[ ! -e $ve_current || $link != $ve_dir ]]; then
+        echo "'current' symlink is broken, going to recreate it"
+        echo "now it points to '$link'"
+        echo "should be: '$ve_dir'"
+        rm -f $ve_current
+        ln -s $ve_dir $ve_current 
+        echo "OK!"
+    fi
+elif [[ -d $ve_dir ]]; then
+    echo "Found unfinished virtualenv, going to remove it"
+    rm -rf $ve_dir
+fi
+
+
+if [[ ! -d $ve_dir ]]; then
+    echo "Creating new virtualenv (ver. $md5)"
+    mkdir $ve_dir
+    virtualenv $ve_dir
+    source $ve_dir/bin/activate
+    pip install --download-cache=$pip_cache -U setuptools
+    pip install --download-cache=$pip_cache -U pip
+    pip install --download-cache=$pip_cache -U distribute
+
+    if [[ $implant_file ]]; then
+        echo "Implanting requirements from $implant_file"
+        while read package; do
+            implant_module $package
+        done < $implant_file
+    fi
+
+    devpi_settings=''
+    if [[ $devpi ]]; then
+        echo "Install and setup devpi"
+        pip install --download-cache=$pip_cache -U devpi-client
+
+        devpi use $devpi
+        devpi login $devpi_user --password "$devpi_password"
+        devpi_settings="-i $devpi/$devpi_repo"
+    fi
+
+    echo "Installing requirements from file $reqs_file"
+    if [[ $wheels_dir ]]; then
+        pip install --no-index --find-links=$wheels_dir -r $reqs_file
+    else
+        pip install $devpi_settings -r $reqs_file
+    fi
+
+    echo "Finishing up"
+    rm -f $ve_current
+    ln -s $ve_dir $ve_current 
+    touch $ve_dir/finished
+fi
