@@ -1,5 +1,5 @@
 #!/bin/bash
-set -ex
+set -e
 
 if [[ -z "$1" ]]; then
     echo "Usage: $0 <package-name>"
@@ -22,4 +22,5 @@ if [[ ! -e "$LIB_DIR/$1" ]]; then
 fi
 
 echo "Implanting $1 package to virtualenv $VIRTUAL_ENV"
+set -x
 ln -fsv $LIB_DIR/$1 $VIRTUAL_ENV/lib/python2.7/site-packages/
