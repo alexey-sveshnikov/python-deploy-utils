@@ -1,21 +1,20 @@
 #!/bin/sh
+set -ex
 
-if [ -z "$1" ]; then
-    HOST='virtual'
-else
-    HOST=$1
-fi
-
+HOST=$1
 PACKAGE='futubank-deploy-utils'
 
 echo "Deploying to $HOST"
 
+version=`head -n1 debian/changelog | cut -f2 -d\( | cut -f1 -d\)`
+deb_file=${PACKAGE}_${version}_amd64.deb
+
 HOME=`ssh $HOST pwd`
 
-dpkg-buildpackage -us -uc \
+pdebuild --buildresult .. --debbuildopts '-us -uc' \
 && ssh $HOST 'mkdir -p repo' \
 && ssh $HOST 'sudo sh -c "echo \"deb file:$HOME/repo /\" > /etc/apt/sources.list.d/local.list"' \
-&& scp ../${PACKAGE}_0.1_amd64.deb $HOST:repo \
+&& scp ../$deb_file $HOST:repo \
 && ssh $HOST 'cd repo && dpkg-scanpackages . /dev/null | gzip -9 > Packages.gz' \
 && ssh $HOST 'sudo apt-get update -o Dir::Etc::sourcelist="sources.list.d/local.list" -o Dir::Etc::sourceparts="-" -o APT::Get::List-Cleanup="0"' \
 && ssh $HOST "sudo dpkg -P $PACKAGE; sudo apt-get install -y --force-yes $PACKAGE"
