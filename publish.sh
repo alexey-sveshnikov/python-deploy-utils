@@ -3,7 +3,8 @@
 PACKAGE='futubank-deploy-utils'
 REPOSITORY_HOST='repo0'
 
-version=`head -n1 debian/changelog | cut -f2 -d\( | cut -f1 -d\)`
+#version=`head -n1 debian/changelog | cut -f2 -d\( | cut -f1 -d\)`
+version=`date +"%Y-%m-%d--%H-%M" | tr -d "\n"`
 
 pdebuild --buildresult .. --debbuildopts '-us -uc'
 
