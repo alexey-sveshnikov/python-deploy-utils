@@ -104,7 +104,7 @@ if [[ ! -d $ve_dir ]]; then
     devpi_settings=''
     if [[ $devpi ]]; then
         echo "Install and setup devpi"
-        pip install --download-cache=$pip_cache -U devpi-client==1.2.2
+        pip install --download-cache=$pip_cache -U devpi-client==1.2.2 devpi-common=1.2
 
         devpi use $devpi
         devpi login $devpi_user --password "$devpi_password"
