@@ -1,7 +1,7 @@
 #!/bin/bash
 set -e
 
-ARGS=$(getopt -o r:i:p:w: --long requirements:,implant:,path,wheels:,devpi:,devpi-repo:,devpi-user:,devpi-password: -n '$0' -- "$@")
+ARGS=$(getopt -o r:i:p:w: --long requirements:,implant:,path,wheels:,devpi:,devpi-repo:,devpi-user:,devpi-password:,pip-cache-dir: -n '$0' -- "$@")
 eval set -- "$ARGS"
 
 reqs_file=''
@@ -12,6 +12,7 @@ devpi=''
 devpi_repo=''
 devpi_user=''
 devpi_password=''
+pip_cache_dir='/var/lib/pip-cache'
 
 while true; do
     case "$1" in
@@ -23,6 +24,7 @@ while true; do
         --devpi-repo ) devpi_repo=$2; shift 2 ;;
         --devpi-user ) devpi_user=$2; shift 2 ;;
         --devpi-password ) devpi_password=$2; shift 2 ;;
+        --pip-cache-dir ) pip_cache_dir=$2; shift 2 ;;
         -- ) shift; break ;;
         * ) break ;;
     esac
@@ -32,6 +34,8 @@ if [[ -z $reqs_file || -z $ve_root ]]; then
     echo "Usage: $0 -p /var/lib/virtualenv_root_dir [-r requirements.txt] [-w wheels_dir] [-i requerements_implant.txt] [-d devpi_url]"
     echo "or:    $0 --path=<...> --requirements=<...> [--wheels-dir=<...>] [--implant=<...>]"
     echo "devpi example: $0 ... --devpi http://localhost:3141 --devpi-repo zed/prod --devpi-user zed [--devpi-password pass]"
+    echo "other options:"
+    echo "                --pip-cache-dir=/var/lib/pip-cache"
     echo "Please note that -p argument must be virtualenv root dir, not the actual virtualenv directory"
     exit 1
 fi
@@ -66,7 +70,12 @@ md5=`echo "$md5" | cut -f1 -d' '`
 
 ve_dir="$ve_root/$md5";
 ve_current="$ve_root/current"
-pip_cache='/var/lib/pip-cache'
+
+if [[ $pip_cache_dir ]]; then
+    pip_cache_option=" --download-cache=$pip_cache_dir"
+else
+    pip_cache_option=''
+fi
 
 if [[ -d $ve_dir && -f $ve_dir/finished ]]; then
     echo "Virtualenv is OK";
@@ -90,9 +99,9 @@ if [[ ! -d $ve_dir ]]; then
     mkdir $ve_dir
     virtualenv $ve_dir
     source $ve_dir/bin/activate
-    pip install --download-cache=$pip_cache -U setuptools
-    pip install --download-cache=$pip_cache -U pip
-    pip install --download-cache=$pip_cache -U distribute
+    pip install $pip_cache_option -U setuptools
+    pip install $pip_cache_option -U pip
+    pip install $pip_cache_option -U distribute
 
     if [[ $implant_file ]]; then
         echo "Implanting requirements from $implant_file"
@@ -104,7 +113,7 @@ if [[ ! -d $ve_dir ]]; then
     devpi_settings=''
     if [[ $devpi ]]; then
         echo "Install and setup devpi"
-        pip install --download-cache=$pip_cache -U devpi-client==1.2.2 devpi-common==1.2
+        pip install $pip_cache_option -U devpi-client==2.0.2 devpi-common==2.0.2 devpi-server==2.0.6
 
         devpi use $devpi
         devpi login $devpi_user --password "$devpi_password"
