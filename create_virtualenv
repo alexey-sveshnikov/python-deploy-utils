@@ -1,7 +1,7 @@
 #!/bin/bash
 set -e
 
-ARGS=$(getopt -o r:i:p:w: --long requirements:,implant:,path,wheels:,devpi:,devpi-repo:,devpi-user:,devpi-password:,pip-cache-dir: -n '$0' -- "$@")
+ARGS=$(getopt -o r:i:p:w:fl: --long requirements:,implant:,path:,wheels:,devpi:,devpi-repo:,devpi-user:,devpi-password:,pip-download-cache:,force,interpreter-link: -n '$0' -- "$@")
 eval set -- "$ARGS"
 
 reqs_file=''
@@ -12,7 +12,9 @@ devpi=''
 devpi_repo=''
 devpi_user=''
 devpi_password=''
-pip_cache_dir='/var/lib/pip-cache'
+pip_download_cache=''
+interpreter_link=''
+force=''
 
 while true; do
     case "$1" in
@@ -20,11 +22,13 @@ while true; do
         -i | --implant ) implant_file=$2; shift 2 ;;
         -p | --path ) ve_root=$2; shift 2 ;;
         -w | --wheels ) wheels_dir=$2; shift 2 ;;
+        -f | --force ) force=1; shift ;;
+        -l | --interpreter-link ) interpreter_link=$2; shift 2 ;;
         --devpi ) devpi=$2; shift 2 ;;
         --devpi-repo ) devpi_repo=$2; shift 2 ;;
         --devpi-user ) devpi_user=$2; shift 2 ;;
         --devpi-password ) devpi_password=$2; shift 2 ;;
-        --pip-cache-dir ) pip_cache_dir=$2; shift 2 ;;
+        --pip-download-cache ) pip_download_cache=$2; shift 2 ;;
         -- ) shift; break ;;
         * ) break ;;
     esac
@@ -35,7 +39,8 @@ if [[ -z $reqs_file || -z $ve_root ]]; then
     echo "or:    $0 --path=<...> --requirements=<...> [--wheels-dir=<...>] [--implant=<...>]"
     echo "devpi example: $0 ... --devpi http://localhost:3141 --devpi-repo zed/prod --devpi-user zed [--devpi-password pass]"
     echo "other options:"
-    echo "                --pip-cache-dir=/var/lib/pip-cache"
+    echo "                --pip-download-cache=<...> - passed to pip as --download-cache"
+    echo "                --force - create new virtualenv even if it already exists"
     echo "Please note that -p argument must be virtualenv root dir, not the actual virtualenv directory"
     exit 1
 fi
@@ -71,32 +76,37 @@ md5=`echo "$md5" | cut -f1 -d' '`
 ve_dir="$ve_root/$md5";
 ve_current="$ve_root/current"
 
-if [[ $pip_cache_dir ]]; then
-    pip_cache_option=" --download-cache=$pip_cache_dir"
+if [[ $pip_download_cache ]]; then
+    pip_cache_option=" --download-cache=$pip_download_cache"
 else
     pip_cache_option=''
 fi
 
 if [[ -d $ve_dir && -f $ve_dir/finished ]]; then
-    echo "Virtualenv is OK";
-    link=`readlink $ve_current || :`
-    if [[ ! -e $ve_current || $link != $ve_dir ]]; then
-        echo "'current' symlink is broken, going to recreate it"
-        echo "now it points to '$link'"
-        echo "should be: '$ve_dir'"
-        rm -f $ve_current
-        ln -s $ve_dir $ve_current 
-        echo "OK!"
+    if [[ $force ]]; then
+        echo "Removing $ve_dir due to --force option"
+        rm -rf "$ve_dir"
+    else
+        echo "Virtualenv is OK";
+        link=`readlink $ve_current || :`
+        if [[ ! -e $ve_current || $link != $ve_dir ]]; then
+            echo "'current' symlink is broken, going to recreate it"
+            echo "now it points to '$link'"
+            echo "should be: '$ve_dir'"
+            rm -f "$ve_current"
+            ln -s $ve_dir $ve_current 
+            echo "OK!"
+        fi
     fi
 elif [[ -d $ve_dir ]]; then
     echo "Found unfinished virtualenv, going to remove it"
-    rm -rf $ve_dir
+    rm -rf "$ve_dir"
 fi
 
 
 if [[ ! -d $ve_dir ]]; then
     echo "Creating new virtualenv (ver. $md5)"
-    mkdir $ve_dir
+    mkdir -p $ve_dir
     virtualenv $ve_dir
     source $ve_dir/bin/activate
     pip install $pip_cache_option -U setuptools
@@ -128,7 +138,17 @@ if [[ ! -d $ve_dir ]]; then
     fi
 
     echo "Finishing up"
-    rm -f $ve_current
+    rm -f "$ve_current"
     ln -s $ve_dir $ve_current 
     touch $ve_dir/finished
+fi
+
+if [[ $interpreter_link ]]; then
+    link_target="$ve_current/bin/python"
+    if [[ ! -L $interpreter_link || `readlink $interpreter_link` != $link_target ]]; then
+        echo "Linking $interpreter_link to $link_target"
+        ln -sf $link_target $interpreter_link
+    else
+        echo "Interpreter link is OK ($interpreter_link -> $link_target)"
+    fi
 fi
