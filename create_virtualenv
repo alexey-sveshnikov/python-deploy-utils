@@ -1,7 +1,11 @@
 #!/bin/bash
-set -e
+set -ex
 
-ARGS=$(getopt -o r:i:p:w:fl: --long requirements:,implant:,path:,wheels:,devpi:,devpi-repo:,devpi-user:,devpi-password:,pip-download-cache:,force,interpreter-link: -n '$0' -- "$@")
+#ARGS=$(getopt -o r:i:p:w:fl: --long requirements:,implant:,path:,wheels:,devpi:,devpi-repo:,devpi-user:,devpi-password:,pip-download-cache:,force,interpreter-link: -n '$0' -- $*)
+ARGS=`getopt r:i:p:w:fl: $*`
+if [[ $? != 0 ]]; then
+   echo 'ERROR'
+fi
 eval set -- "$ARGS"
 
 reqs_file=''
@@ -58,7 +62,12 @@ if [[ $devpi && $wheels_dir ]]; then
 fi
 
 # Calculate digest
-md5=`cat $reqs_file | md5sum`
+if [[ `uname` == "Darwin" ]]; then
+    md5_prog='md5'
+else
+    md5_prog='md5sum'
+fi
+umd5=`cat $reqs_file | $md5_prog`
 
 if [[ $wheels_dir ]]; then
     # Add both wheel names and content
@@ -67,7 +76,7 @@ if [[ $wheels_dir ]]; then
 fi
 
 if [[ $implant_file ]]; then
-    md5=`(echo "$md5"; cat $implant_file) | md5sum`
+    md5=`(echo "$md5"; cat $implant_file) | $md5_prog`
 fi
 
 md5=`echo "$md5" | cut -f1 -d' '`
