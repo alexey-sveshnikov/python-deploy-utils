@@ -4,6 +4,7 @@ set -e
 ARGS=$(getopt -o r:i:p:w:fl: --long requirements:,implant:,path:,wheels:,devpi:,devpi-repo:,devpi-user:,devpi-password:,pip-download-cache:,force,interpreter-link: -n '$0' -- "$@")
 eval set -- "$ARGS"
 
+# Options
 reqs_file=''
 implant_file=''
 ve_root=''
@@ -15,6 +16,13 @@ devpi_password=''
 pip_download_cache=''
 interpreter_link=''
 force=''
+###
+
+# Path to implant_module script.
+# We look for it in the same directory as create_virtualenv, 
+# so we can find it if they both were installed by debian package,
+# or checked out as git submodule
+implant_module_bin="$(dirname "$0")/implant_module"
 
 while true; do
     case "$1" in
@@ -116,7 +124,7 @@ if [[ ! -d $ve_dir ]]; then
     if [[ $implant_file ]]; then
         echo "Implanting requirements from $implant_file"
         while read package; do
-            implant_module $package
+            $implant_module_bin $package
         done < $implant_file
     fi
 
