@@ -1,5 +1,5 @@
-futubank-deploy-utils (2014-07-25--17-43) unstable; urgency=low
+python-deploy-utils (2014-09-12--16-15) unstable; urgency=low
 
-  * Nothing here
+  * Dummy changelog record
 
- -- Alexey <alexey@futubank.com>  Fri, 04 Apr 2013 11:52:18 +0400
+ -- Alexey Sveshnikov <alexey.sveshnikov@gmail.com>  Fri, 04 Apr 2013 11:52:18 +0400
