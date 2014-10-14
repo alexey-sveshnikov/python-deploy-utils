@@ -1,7 +1,44 @@
 #!/bin/bash
-set -e
+set -ex
 
-ARGS=$(getopt -o r:i:p:w:fl: --long requirements:,implant:,path:,wheels:,devpi:,devpi-repo:,devpi-user:,devpi-password:,pip-download-cache:,force,interpreter-link: -n '$0' -- "$@")
+usage() {
+    set +x
+    script=`basename $0`
+    user=`whoami`
+
+    cat <<END
+Usage:
+    $script -p /var/lib/virtualenv_root_dir [-r requirements.txt] [-i requerements_implant.txt]
+
+devpi example:
+    $script -p ... -r ... -D http://localhost:3141 -R $user/prod -U $user [-P pass]
+
+Available options:
+    -p <directory> path to virtualenv root *required*
+    -r <requirements.txt> path to file with dependencies
+    -i <requirements-implant.txt> path to file with dependencies (to be installed by symlinking from system libraries)
+    -f force creating new virtualenv (even if is already exists)
+    -w <wheels_dir> path to directory with wheels files
+    -l <symlink_file> create symlink to python interpreter
+    -C <pip_cache_dir> pip cache directory (passed to pip as --download-cache)
+    -h print this help
+
+Devpi options:
+    -D <devpi_url> devpi URL (ex.: http://localhost:3134/)
+    -R <devpi_repo> devpi repository name (ex.: $user/dev)
+    -U <devpi_user> devpi login name (ex.: $user)
+    -P <devpi_password> devpi password
+
+P.S. long option names were sacrificed to Mac OS compatibility. Sorry about that.
+END
+    exit 1
+}
+
+ARGS=`getopt r:i:p:w:fl: $*`
+if [[ $? != 0 ]]; then
+    usage
+fi
+
 eval set -- "$ARGS"
 
 # Options
@@ -26,31 +63,25 @@ implant_module_bin="$(dirname "$0")/implant_module"
 
 while true; do
     case "$1" in
-        -r | --requirements ) reqs_file=$2; shift 2 ;;
-        -i | --implant ) implant_file=$2; shift 2 ;;
-        -p | --path ) ve_root=$2; shift 2 ;;
-        -w | --wheels ) wheels_dir=$2; shift 2 ;;
-        -f | --force ) force=1; shift ;;
-        -l | --interpreter-link ) interpreter_link=$2; shift 2 ;;
-        --devpi ) devpi=$2; shift 2 ;;
-        --devpi-repo ) devpi_repo=$2; shift 2 ;;
-        --devpi-user ) devpi_user=$2; shift 2 ;;
-        --devpi-password ) devpi_password=$2; shift 2 ;;
-        --pip-download-cache ) pip_download_cache=$2; shift 2 ;;
+        -r ) reqs_file=$2; shift 2 ;;
+        -i ) implant_file=$2; shift 2 ;;
+        -p ) ve_root=$2; shift 2 ;;
+        -w ) wheels_dir=$2; shift 2 ;;
+        -f ) force=1; shift ;;
+        -l ) interpreter_link=$2; shift 2 ;;
+        -D ) devpi=$2; shift 2 ;;
+        -R ) devpi_repo=$2; shift 2 ;;
+        -U ) devpi_user=$2; shift 2 ;;
+        -P ) devpi_password=$2; shift 2 ;;
+        -C ) pip_download_cache=$2; shift 2 ;;
+        -h ) usage ;;
         -- ) shift; break ;;
         * ) break ;;
     esac
 done
 
 if [[ -z $reqs_file || -z $ve_root ]]; then
-    echo "Usage: $0 -p /var/lib/virtualenv_root_dir [-r requirements.txt] [-w wheels_dir] [-i requerements_implant.txt] [-d devpi_url]"
-    echo "or:    $0 --path=<...> --requirements=<...> [--wheels-dir=<...>] [--implant=<...>]"
-    echo "devpi example: $0 ... --devpi http://localhost:3141 --devpi-repo zed/prod --devpi-user zed [--devpi-password pass]"
-    echo "other options:"
-    echo "                --pip-download-cache=<...> - passed to pip as --download-cache"
-    echo "                --force - create new virtualenv even if it already exists"
-    echo "Please note that -p argument must be virtualenv root dir, not the actual virtualenv directory"
-    exit 1
+    usage
 fi
 
 if [[ $devpi ]]; then
@@ -65,17 +96,23 @@ if [[ $devpi && $wheels_dir ]]; then
     exit 1
 fi
 
+
 # Calculate digest
-md5=`cat $reqs_file | md5sum`
+if [[ `uname` == "Darwin" ]]; then
+    md5_prog='md5'
+else
+    md5_prog='md5sum'
+fi
+md5=`cat $reqs_file | $md5_prog`
 
 if [[ $wheels_dir ]]; then
     # Add both wheel names and content
-    md5=`(echo "$md5"; find $wheels_dir -type f | sort) | md5sum`
-    md5=`(echo "$md5"; find $wheels_dir -type f | sort | xargs cat) | md5sum`
+    md5=`(echo "$md5"; find $wheels_dir -type f | sort) | $md5_prog`
+    md5=`(echo "$md5"; find $wheels_dir -type f | sort | xargs cat) | $md5_prog`
 fi
 
 if [[ $implant_file ]]; then
-    md5=`(echo "$md5"; cat $implant_file) | md5sum`
+    md5=`(echo "$md5"; cat $implant_file) | $md5_prog`
 fi
 
 md5=`echo "$md5" | cut -f1 -d' '`
@@ -147,7 +184,7 @@ if [[ ! -d $ve_dir ]]; then
 
     echo "Finishing up"
     rm -f "$ve_current"
-    ln -s $ve_dir $ve_current 
+    ln -s $ve_dir $ve_current
     touch $ve_dir/finished
 fi
 
