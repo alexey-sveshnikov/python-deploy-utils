@@ -34,7 +34,7 @@ END
     exit 1
 }
 
-ARGS=`getopt r:i:p:w:fl: $*`
+ARGS=`getopt r:i:p:w:fl:C: $*`
 if [[ $? != 0 ]]; then
     usage
 fi
