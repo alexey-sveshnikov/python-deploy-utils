@@ -152,7 +152,7 @@ fi
 if [[ ! -d $ve_dir ]]; then
     echo "Creating new virtualenv (ver. $md5)"
     mkdir -p $ve_dir
-    virtualenv $ve_dir
+    python -m virtualenv $ve_dir
     source $ve_dir/bin/activate
     pip install $pip_cache_option -U setuptools
     pip install $pip_cache_option -U pip
